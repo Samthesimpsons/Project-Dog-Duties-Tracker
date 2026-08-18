@@ -34,7 +34,7 @@ async function handleStatus(chatId) {
   if (!stats) {
     await tg("sendMessage", {
       chat_id: chatId,
-      text: "No data yet — tick your first checklist and check back!",
+      text: "No data yet - tick your first checklist and check back!",
     });
     return;
   }

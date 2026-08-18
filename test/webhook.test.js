@@ -11,7 +11,7 @@ const post = (body, headers = SECRET) => {
   return handler({ method: "POST", headers, body }, res).then(() => res);
 };
 const msg = (text, chatId = 12345) => ({ message: { chat: { id: chatId }, text } });
-const cb = (data, text = "🌙 Tue 18 Aug — wash the bowls:") => ({
+const cb = (data, text = "🌙 Tue 18 Aug - wash the bowls:") => ({
   callback_query: { id: "cbid", data, message: { chat: { id: 12345 }, message_id: 7, text } },
 });
 
@@ -53,20 +53,20 @@ test("bowl buttons toggle, edit message, add 🎉 when both done", async () => {
   await post(cb("bowl:water"));
   let edit = calls.find((c) => c.method === "editMessageText").payload;
   assert.equal(edit.message_id, 7);
-  assert.equal(edit.text, "🌙 Tue 18 Aug — wash the bowls:");
+  assert.equal(edit.text, "🌙 Tue 18 Aug - wash the bowls:");
   assert.equal(edit.reply_markup.inline_keyboard[0][0].text, "✅ Water bowl");
   assert.ok(calls.some((c) => c.method === "answerCallbackQuery"));
 
   calls.length = 0;
   await post(cb("bowl:food"));
   edit = calls.find((c) => c.method === "editMessageText").payload;
-  assert.equal(edit.text, "🌙 Tue 18 Aug — wash the bowls: 🎉");
+  assert.equal(edit.text, "🌙 Tue 18 Aug - wash the bowls: 🎉");
 
   // untick -> 🎉 removed
   calls.length = 0;
-  await post(cb("bowl:food", "🌙 Tue 18 Aug — wash the bowls: 🎉"));
+  await post(cb("bowl:food", "🌙 Tue 18 Aug - wash the bowls: 🎉"));
   edit = calls.find((c) => c.method === "editMessageText").payload;
-  assert.equal(edit.text, "🌙 Tue 18 Aug — wash the bowls:");
+  assert.equal(edit.text, "🌙 Tue 18 Aug - wash the bowls:");
 
   const row = await db.execute("SELECT water, food FROM bowls WHERE date = ?", [todayKey()]);
   assert.equal(row.rows[0].water, 1);
@@ -74,14 +74,14 @@ test("bowl buttons toggle, edit message, add 🎉 when both done", async () => {
 });
 
 test("bath button toggles and edits", async () => {
-  await post(cb("bath:done", "🛁 Sat 22 Aug — bath time:"));
+  await post(cb("bath:done", "🛁 Sat 22 Aug - bath time:"));
   let edit = calls.find((c) => c.method === "editMessageText").payload;
-  assert.equal(edit.text, "🛁 Sat 22 Aug — bath time: 🎉");
+  assert.equal(edit.text, "🛁 Sat 22 Aug - bath time: 🎉");
   assert.equal(edit.reply_markup.inline_keyboard[0][0].text, "✅ Bathed!");
   calls.length = 0;
-  await post(cb("bath:done", "🛁 Sat 22 Aug — bath time: 🎉"));
+  await post(cb("bath:done", "🛁 Sat 22 Aug - bath time: 🎉"));
   edit = calls.find((c) => c.method === "editMessageText").payload;
-  assert.equal(edit.text, "🛁 Sat 22 Aug — bath time:");
+  assert.equal(edit.text, "🛁 Sat 22 Aug - bath time:");
   assert.equal(edit.reply_markup.inline_keyboard[0][0].text, "⬜ Bath the dog");
 });
 

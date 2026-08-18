@@ -48,12 +48,34 @@ test("getStats: null with no data, otherwise one session per day", async () => {
   assert.equal(s.bathDonePct, 50);
 });
 
-test("getStats: a bath before any bowl still starts the window; old baths outside window ignored", async () => {
+test("getStats: bath in the same week as the first bowl does not add missed bowl days", async () => {
+  await toggleBowl("2026-08-18", "water");
+  await toggleBowl("2026-08-18", "food");
+  await toggleBath("2026-W34"); // Mon 2026-08-17, before the first bowl day
+  const s = await getStats("2026-08-18");
+  assert.equal(s.start, "2026-08-18");
+  assert.equal(s.trackedDays, 1);
+  assert.equal(s.doneDays, 1);
+  assert.equal(s.trackedWeeks, 1);
+  assert.equal(s.bathsDone, 1);
+});
+
+test("getStats: earlier baths widen the week range but not the day range", async () => {
   await toggleBath("2026-W33"); // Mon 2026-08-10
-  await toggleBath("2026-W20"); // long ago -> outside 30-day window
   await getBowl("2026-08-18");
   const s = await getStats("2026-08-18");
-  assert.equal(s.start, "2026-07-20"); // capped at 30 days
+  assert.equal(s.start, "2026-08-18");
+  assert.equal(s.trackedDays, 1);
+  assert.equal(s.trackedWeeks, 2); // W33, W34
+  assert.equal(s.bathsDone, 1);
+  assert.equal(s.bathsMissed, 1);
+});
+
+test("getStats: bath before any bowl starts the window; baths outside 30 days ignored", async () => {
+  await toggleBath("2026-W33"); // Mon 2026-08-10
+  await toggleBath("2026-W20"); // long ago -> outside 30-day window
+  const s = await getStats("2026-08-18");
+  assert.equal(s.start, "2026-07-20"); // clamped to the 30-day window
   assert.equal(s.trackedWeeks, 5); // W30..W34
   assert.equal(s.bathsDone, 1);
   assert.equal(s.bathsMissed, 4);

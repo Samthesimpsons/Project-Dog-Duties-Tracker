@@ -88,7 +88,7 @@ export async function toggleBath(week) {
 
 /**
  * Stats over the last `days` days (default 30), starting no earlier than the
- * first day the bot was used — so untracked history doesn't count as "missed".
+ * first day the bot was used - so untracked history doesn't count as "missed".
  * A day counts as done only if BOTH bowls were ticked. Bath weeks are the ISO
  * weeks touched by the same window.
  */
@@ -97,7 +97,9 @@ export async function getStats(todayStr, days = 30) {
 
   const firstBowl = (await db.execute("SELECT MIN(date) AS d FROM bowls")).rows[0]?.d;
   const firstBathWeek = (await db.execute("SELECT MIN(week) AS w FROM baths")).rows[0]?.w;
-  const firstDate = [firstBowl, firstBathWeek && mondayOf(firstBathWeek)].filter(Boolean).sort()[0];
+  // Days are tracked from the first bowl checklist; if there is none yet, from
+  // the week of the first bath. Weeks additionally reach back to the first bath.
+  const firstDate = firstBowl ?? (firstBathWeek && mondayOf(firstBathWeek));
   if (!firstDate) return null;
 
   const windowStart = new Date(Date.parse(todayStr) - (days - 1) * 86400000)
@@ -113,8 +115,10 @@ export async function getStats(todayStr, days = 30) {
   });
   const doneDays = Number(done.rows[0].n);
 
+  const bathMonday = firstBathWeek ? mondayOf(firstBathWeek) : start;
+  const weekStart = [bathMonday < start ? bathMonday : start, windowStart].sort()[1];
   const weeks = new Set();
-  for (let t = Date.parse(start); t <= Date.parse(todayStr); t += 86400000) {
+  for (let t = Date.parse(weekStart); t <= Date.parse(todayStr); t += 86400000) {
     weeks.add(isoWeek(new Date(t)));
   }
   const bathRows = await db.execute({

@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
   await tg("sendMessage", {
     chat_id: CHAT_ID,
-    text: `🌙 ${prettyDate()} — wash the bowls:`,
+    text: `🌙 ${prettyDate()} - wash the bowls:`,
     reply_markup: bowlKeyboard({ water: 0, food: 0 }),
   });
   return res.status(200).json({ ok: true });
