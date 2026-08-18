@@ -1,0 +1,8 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,json,md}"
+      run: npx biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
+    test:
+      run: npm test

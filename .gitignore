@@ -1,0 +1,19 @@
+# deps
+node_modules/
+
+# vercel
+.vercel/
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# lefthook local overrides
+lefthook-local.yml
+
+# logs / OS / editor
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,20 @@
+{
+  "name": "dog-bowl-bot",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
+  },
+  "scripts": {
+    "test": "node --import ./test/helpers.js --test test/*.test.js",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "check": "npm run lint && npm test",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.9",
+    "lefthook": "^2.1.10"
+  }
+}
