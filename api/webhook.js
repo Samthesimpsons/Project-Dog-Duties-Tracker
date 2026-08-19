@@ -90,7 +90,7 @@ export default async function handler(req, res) {
         const state = await getBowl(date);
         await tg("sendMessage", {
           chat_id: chatId,
-          text: "🌙 Wash the bowls:",
+          text: "☀️ Wash the bowls:",
           reply_markup: bowlKeyboard(state, date),
         });
       } else if (text === "/bath") {

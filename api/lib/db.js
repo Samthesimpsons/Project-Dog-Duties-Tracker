@@ -6,7 +6,7 @@ export const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// One bowl session per day (nightly). The `slot` column is kept for schema
+// One bowl session per day (morning). The `slot` column is kept for schema
 // compatibility; every row uses SLOT.
 const SLOT = "evening";
 

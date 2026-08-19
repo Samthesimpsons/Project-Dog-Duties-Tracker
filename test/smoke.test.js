@@ -15,7 +15,7 @@ const post = async (body) => {
   return res;
 };
 const msg = (text, chatId = 12345) => ({ message: { chat: { id: chatId }, text } });
-const tap = (data, text = "🌙 wash the bowls:", chatId = 12345) => ({
+const tap = (data, text = "☀️ wash the bowls:", chatId = 12345) => ({
   callback_query: { id: "cbid", data, message: { chat: { id: chatId }, message_id: 7, text } },
 });
 const last = (method) => calls.filter((c) => c.method === method).at(-1)?.payload;
@@ -110,7 +110,7 @@ test("untouched day and untouched week both count as missed in /status", async (
 });
 
 test("callbacks from other chats are ignored and change nothing", async () => {
-  await post(tap(`bowl:water:${todayKey()}`, "🌙", 999));
+  await post(tap(`bowl:water:${todayKey()}`, "☀️", 999));
   assert.equal((await rows("SELECT COUNT(*) AS n FROM bowls"))[0].n, 0);
   assert.ok(!calls.some((c) => c.method === "editMessageText"));
   assert.ok(calls.some((c) => c.method === "answerCallbackQuery"));

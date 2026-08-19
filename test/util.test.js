@@ -9,8 +9,8 @@ test("todayKey flips at Singapore midnight, not UTC", () => {
   assert.equal(todayKey(new Date("2026-08-18T16:00:00Z")), "2026-08-19");
 });
 
-test("bowl cron time (13:00 UTC) lands on the same SGT day", () => {
-  assert.equal(todayKey(new Date("2026-08-18T13:00:00Z")), "2026-08-18");
+test("bowl cron time (01:00 UTC) lands on the same SGT day", () => {
+  assert.equal(todayKey(new Date("2026-08-18T01:00:00Z")), "2026-08-18");
 });
 
 test("weekKey is ISO week and stable across the weekend", () => {
