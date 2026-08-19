@@ -1,32 +1,39 @@
-import { getBowl, getStats, toggleBath, toggleBowl } from "./lib/db.js";
+import { getBath, getBowl, getStats, toggleBath, toggleBowl } from "./lib/db.js";
 import { bathKeyboard, bowlKeyboard } from "./lib/keyboard.js";
 import { CHAT_ID, tg, todayKey, weekKey } from "./lib/util.js";
 
 async function handleCallback(cb) {
-  const msg = cb.message;
-  const [kind, item] = cb.data.split(":");
-  const base = msg.text.replace(/ 🎉$/, "");
+  try {
+    const msg = cb.message;
+    if (!msg) return;
+    if (CHAT_ID && String(msg.chat.id) !== String(CHAT_ID)) return;
 
-  if (kind === "bath") {
-    const done = await toggleBath(weekKey());
-    await tg("editMessageText", {
-      chat_id: msg.chat.id,
-      message_id: msg.message_id,
-      text: done ? `${base} 🎉` : base,
-      reply_markup: bathKeyboard(done),
-    });
-  } else if (kind === "bowl") {
-    const state = await toggleBowl(todayKey(), item);
-    const allDone = state.water && state.food;
-    await tg("editMessageText", {
-      chat_id: msg.chat.id,
-      message_id: msg.message_id,
-      text: allDone ? `${base} 🎉` : base,
-      reply_markup: bowlKeyboard(state),
-    });
+    const [kind, item, key] = (cb.data ?? "").split(":");
+    const base = (msg.text ?? "").replace(/ 🎉$/, "");
+
+    if (kind === "bath") {
+      const week = key || weekKey();
+      const done = await toggleBath(week);
+      await tg("editMessageText", {
+        chat_id: msg.chat.id,
+        message_id: msg.message_id,
+        text: done ? `${base} 🎉` : base,
+        reply_markup: bathKeyboard(done, week),
+      });
+    } else if (kind === "bowl") {
+      const date = key || todayKey();
+      const state = await toggleBowl(date, item);
+      const allDone = state.water && state.food;
+      await tg("editMessageText", {
+        chat_id: msg.chat.id,
+        message_id: msg.message_id,
+        text: allDone ? `${base} 🎉` : base,
+        reply_markup: bowlKeyboard(state, date),
+      });
+    }
+  } finally {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
   }
-
-  await tg("answerCallbackQuery", { callback_query_id: cb.id });
 }
 
 async function handleStatus(chatId) {
@@ -79,17 +86,20 @@ export default async function handler(req, res) {
       if (text === "/status" || text === "/stats") {
         await handleStatus(chatId);
       } else if (text === "/bowls") {
-        const state = await getBowl(todayKey());
+        const date = todayKey();
+        const state = await getBowl(date);
         await tg("sendMessage", {
           chat_id: chatId,
           text: "🌙 Wash the bowls:",
-          reply_markup: bowlKeyboard(state),
+          reply_markup: bowlKeyboard(state, date),
         });
       } else if (text === "/bath") {
+        const week = weekKey();
+        const done = await getBath(week);
         await tg("sendMessage", {
           chat_id: chatId,
           text: "🛁 Bath time:",
-          reply_markup: bathKeyboard(false),
+          reply_markup: bathKeyboard(done, week),
         });
       } else if (text === "/id") {
         await tg("sendMessage", { chat_id: chatId, text: `Your chat id: ${chatId}` });

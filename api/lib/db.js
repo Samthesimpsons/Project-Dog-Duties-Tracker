@@ -70,6 +70,13 @@ export async function getBowl(date) {
   return r.rows[0];
 }
 
+export async function getBath(week) {
+  await ensureSchema();
+  await db.execute({ sql: "INSERT OR IGNORE INTO baths (week) VALUES (?)", args: [week] });
+  const r = await db.execute({ sql: "SELECT done FROM baths WHERE week = ?", args: [week] });
+  return r.rows[0].done === 1;
+}
+
 export async function toggleBath(week) {
   await ensureSchema();
   await db.batch(
