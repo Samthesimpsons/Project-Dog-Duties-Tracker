@@ -24,17 +24,28 @@ export function isoWeek(d) {
   return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-/** YYYY-Www ISO week key for the weekly bath, in the user's local day */
-export function weekKey(base = new Date()) {
-  return isoWeek(localNow(base));
+/**
+ * YYYY-Www key of the bath week containing `d`. Bath weeks run Sat..Fri
+ * (the weekend starts the week), keyed by the ISO week the shifted date
+ * lands in: Sat/Sun map forward into the same ISO week as the Mon..Fri
+ * that follow them.
+ */
+export function bathWeek(d) {
+  if (typeof d === "string") d = new Date(d);
+  return isoWeek(new Date(d.getTime() + 2 * 86400000));
 }
 
-/** "YYYY-MM-DD" of the Monday that starts ISO week `key` (e.g. "2026-W34") */
-export function mondayOf(key) {
+/** YYYY-Www bath-week key (Sat..Fri) for the weekly bath, in the user's local day */
+export function weekKey(base = new Date()) {
+  return bathWeek(localNow(base));
+}
+
+/** "YYYY-MM-DD" of the Saturday that starts bath week `key` (e.g. "2026-W35") */
+export function weekStartOf(key) {
   const [y, w] = key.split("-W").map(Number);
   const jan4 = new Date(Date.UTC(y, 0, 4)); // always in ISO week 1
   const mon = new Date(jan4.getTime() - ((jan4.getUTCDay() || 7) - 1) * 86400000);
-  mon.setUTCDate(mon.getUTCDate() + (w - 1) * 7);
+  mon.setUTCDate(mon.getUTCDate() + (w - 1) * 7 - 2); // back up to the Saturday
   return mon.toISOString().slice(0, 10);
 }
 

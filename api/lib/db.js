@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { isoWeek, mondayOf } from "./util.js";
+import { bathWeek, weekStartOf } from "./util.js";
 
 export const db = createClient({
   url: process.env.TURSO_DATABASE_URL,
@@ -96,8 +96,8 @@ export async function toggleBath(week) {
 /**
  * Stats over the last `days` days (default 30), starting no earlier than the
  * first day the bot was used - so untracked history doesn't count as "missed".
- * A day counts as done only if BOTH bowls were ticked. Bath weeks are the ISO
- * weeks touched by the same window.
+ * A day counts as done only if BOTH bowls were ticked. Bath weeks are the
+ * Sat..Fri weeks touched by the same window.
  */
 export async function getStats(todayStr, days = 30) {
   await ensureSchema();
@@ -106,7 +106,7 @@ export async function getStats(todayStr, days = 30) {
   const firstBathWeek = (await db.execute("SELECT MIN(week) AS w FROM baths")).rows[0]?.w;
   // Days are tracked from the first bowl checklist; if there is none yet, from
   // the week of the first bath. Weeks additionally reach back to the first bath.
-  const firstDate = firstBowl ?? (firstBathWeek && mondayOf(firstBathWeek));
+  const firstDate = firstBowl ?? (firstBathWeek && weekStartOf(firstBathWeek));
   if (!firstDate) return null;
 
   const windowStart = new Date(Date.parse(todayStr) - (days - 1) * 86400000)
@@ -122,11 +122,11 @@ export async function getStats(todayStr, days = 30) {
   });
   const doneDays = Number(done.rows[0].n);
 
-  const bathMonday = firstBathWeek ? mondayOf(firstBathWeek) : start;
-  const weekStart = [bathMonday < start ? bathMonday : start, windowStart].sort()[1];
+  const bathStart = firstBathWeek ? weekStartOf(firstBathWeek) : start;
+  const weekStart = [bathStart < start ? bathStart : start, windowStart].sort()[1];
   const weeks = new Set();
   for (let t = Date.parse(weekStart); t <= Date.parse(todayStr); t += 86400000) {
-    weeks.add(isoWeek(new Date(t)));
+    weeks.add(bathWeek(new Date(t)));
   }
   const bathRows = await db.execute({
     sql: `SELECT COUNT(*) AS n FROM baths WHERE done = 1 AND week IN (${[...weeks].map(() => "?").join(",")})`,
