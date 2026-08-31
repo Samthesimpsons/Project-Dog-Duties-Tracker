@@ -9,25 +9,26 @@ async function handleCallback(cb) {
     if (CHAT_ID && String(msg.chat.id) !== String(CHAT_ID)) return;
 
     const [kind, item, key] = (cb.data ?? "").split(":");
-    const base = (msg.text ?? "").replace(/ 🎉$/, "");
+    const base = (msg.text ?? "").replace(/ (?:🎉|⏭️)$/u, "");
+    // Skip wins over 🎉 when both apply - it's the more informative signal.
+    const marker = (done, skipped) => (skipped ? " ⏭️" : done ? " 🎉" : "");
 
     if (kind === "bath") {
       const week = key || weekKey();
-      const done = await toggleBath(week);
+      const state = await toggleBath(week, item);
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: done ? `${base} 🎉` : base,
-        reply_markup: bathKeyboard(done, week),
+        text: base + marker(state.done, state.skipped),
+        reply_markup: bathKeyboard(state, week),
       });
     } else if (kind === "bowl") {
       const date = key || todayKey();
       const state = await toggleBowl(date, item);
-      const allDone = state.water && state.food;
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: allDone ? `${base} 🎉` : base,
+        text: base + marker(state.water && state.food, state.skipped),
         reply_markup: bowlKeyboard(state, date),
       });
     }
@@ -52,13 +53,15 @@ async function handleStatus(chatId) {
   const text = [
     `📊 Last ${stats.trackedDays} day(s) (since ${stats.start})`,
     ``,
-    `Bowls washed: ${stats.doneDays}/${stats.trackedDays} days`,
+    `Bowls done: ${stats.doneDays}/${stats.trackedDays} days`,
     `${bar(stats.donePct)} ${stats.donePct}% done`,
     `Missed: ${stats.missedDays} days (${stats.missedPct}%)`,
+    `Skipped: ${stats.skippedDays} days (${stats.skippedPct}%)`,
     ``,
     `🛁 Baths done: ${stats.bathsDone}/${stats.trackedWeeks} weeks`,
     `${bar(stats.bathDonePct)} ${stats.bathDonePct}% done`,
     `Missed: ${stats.bathsMissed} weeks (${stats.bathMissedPct}%)`,
+    `Skipped: ${stats.bathsSkipped} weeks (${stats.bathSkippedPct}%)`,
   ].join("\n");
   await tg("sendMessage", { chat_id: chatId, text });
 }
@@ -95,11 +98,11 @@ export default async function handler(req, res) {
         });
       } else if (text === "/bath") {
         const week = weekKey();
-        const done = await getBath(week);
+        const state = await getBath(week);
         await tg("sendMessage", {
           chat_id: chatId,
           text: "🛁 Bath time:",
-          reply_markup: bathKeyboard(done, week),
+          reply_markup: bathKeyboard(state, week),
         });
       } else if (text === "/id") {
         await tg("sendMessage", { chat_id: chatId, text: `Your chat id: ${chatId}` });

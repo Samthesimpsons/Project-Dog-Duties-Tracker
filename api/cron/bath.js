@@ -7,11 +7,11 @@ export default async function handler(req, res) {
     return res.status(401).end();
   }
   const week = weekKey();
-  const done = await getBath(week);
+  const state = await getBath(week);
   await tg("sendMessage", {
     chat_id: CHAT_ID,
     text: `🛁 ${prettyDate()} - bath time:`,
-    reply_markup: bathKeyboard(done, week),
+    reply_markup: bathKeyboard(state, week),
   });
   return res.status(200).json({ ok: true });
 }

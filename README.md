@@ -5,11 +5,16 @@ Telegram bot on Vercel's free tier. An application for my own use.
 - Every morning at **9 AM (Singapore)**: checklist to wash the water + food bowls.
 - Every **Saturday 9 AM (Singapore)**: checklist to bath the dog.
 
+Both checklists carry a **Skip** button for days you're away or weeks the dog
+is at the groomer. A skipped day or week counts as done in the `/status`
+percentage and is also tallied on its own "Skipped:" line, so a planned pass
+doesn't show up as a missed chore.
+
 ## Commands
 
 | Command   | What it does                                          |
 |-----------|-------------------------------------------------------|
-| `/status` | % of days bowls washed & weeks dog bathed / missed     |
+| `/status` | % of days & weeks done (incl. skipped) / missed / skipped |
 | `/bowls`  | Summon today's bowl checklist on demand               |
 | `/bath`   | Summon this week's bath checklist on demand           |
 | `/id`     | Show your chat id (setup only)                        |
@@ -19,13 +24,15 @@ Telegram bot on Vercel's free tier. An application for my own use.
 ```
 📊 Last 30 day(s) (since 2026-07-20)
 
-Bowls washed: 26/30 days
+Bowls done: 26/30 days
 █████████░ 87% done
 Missed: 4 days (13%)
+Skipped: 2 days (7%)
 
 🛁 Baths done: 4/5 weeks
 ████████░░ 80% done
 Missed: 1 weeks (20%)
+Skipped: 1 weeks (20%)
 ```
 
 ## Setup
@@ -63,7 +70,9 @@ Vercel project > **Storage** > Browse Marketplace > **Turso Cloud** > create DB.
 - Connect to project: environment **Production**, no DB branches, **prefix `TURSO`** (the code reads `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`).
 - Redeploy: **Deployments > ⋯ > Redeploy** so the new vars are picked up.
 
-Tables are created automatically on first use: no migrations.
+Tables are created automatically on first use. On a database that predates the
+Skip button, the `skipped` columns are added in place on first use, keeping
+existing history.
 
 ### 4. Register the webhook
 ```bash
@@ -77,7 +86,7 @@ Expect `{"ok":true, ... "Webhook was set"}`.
 3. Redeploy again.
 
 ### 6. Verify
-- `/bowls` > checklist appears; tapping buttons toggles ✅ and adds 🎉 when both done.
+- `/bowls` > checklist appears; tapping buttons toggles ✅ and adds 🎉 when both done, or ⏭️ when the day is skipped.
 - `/status` > stats.
 - Vercel > **Settings > Cron Jobs** lists `/api/cron/bowls` and `/api/cron/bath`; use *Run* there to fire one manually.
 - Problems? Check **Logs** for `/api/webhook`: a 401 means the webhook secret doesn't match; no logs at all means the webhook URL is wrong.

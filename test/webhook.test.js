@@ -95,8 +95,52 @@ test("/status reports days, not sessions", async () => {
   await post(msg("/status"));
   const t = calls[0].payload.text;
   assert.match(t, /Last 1 day\(s\)/);
-  assert.match(t, /Bowls washed: 1\/1 days/);
+  assert.match(t, /Bowls done: 1\/1 days/);
   assert.match(t, /100% done/);
   assert.match(t, /Baths done: 0\/1 weeks/);
   assert.match(t, /Missed: 1 weeks \(100%\)/);
+});
+
+test("skip button adds ⏭️, removes it on untick, and wins over 🎉", async () => {
+  await post(cb("bowl:skip"));
+  let edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "☀️ Tue 18 Aug - wash the bowls: ⏭️");
+  assert.equal(edit.reply_markup.inline_keyboard[1][0].text, "✅ Skip today");
+
+  // both bowls ticked while skipped -> ⏭️ still wins over 🎉
+  await post(cb("bowl:water", "☀️ Tue 18 Aug - wash the bowls: ⏭️"));
+  calls.length = 0;
+  await post(cb("bowl:food", "☀️ Tue 18 Aug - wash the bowls: ⏭️"));
+  edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "☀️ Tue 18 Aug - wash the bowls: ⏭️");
+
+  // unskip -> both bowls are still done, so 🎉 replaces ⏭️
+  calls.length = 0;
+  await post(cb("bowl:skip", "☀️ Tue 18 Aug - wash the bowls: ⏭️"));
+  edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "☀️ Tue 18 Aug - wash the bowls: 🎉");
+});
+
+test("bath skip button adds ⏭️ and removes it on untick", async () => {
+  await post(cb("bath:skip", "🛁 Sat 22 Aug - bath time:"));
+  let edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "🛁 Sat 22 Aug - bath time: ⏭️");
+  assert.equal(edit.reply_markup.inline_keyboard[1][0].text, "✅ Skip this week");
+  calls.length = 0;
+  await post(cb("bath:skip", "🛁 Sat 22 Aug - bath time: ⏭️"));
+  edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "🛁 Sat 22 Aug - bath time:");
+  assert.equal(edit.reply_markup.inline_keyboard[1][0].text, "⬜ Skip this week");
+});
+
+test("/status shows Skipped: lines under the Missed: lines", async () => {
+  await post(cb("bowl:skip"));
+  await post(cb("bath:skip", "🛁 bath time:"));
+  calls.length = 0;
+  await post(msg("/status"));
+  const t = calls[0].payload.text;
+  assert.match(t, /Bowls done: 1\/1 days/);
+  assert.match(t, /Missed: 0 days \(0%\)\nSkipped: 1 days \(100%\)/);
+  assert.match(t, /Baths done: 1\/1 weeks/);
+  assert.match(t, /Missed: 0 weeks \(0%\)\nSkipped: 1 weeks \(100%\)/);
 });

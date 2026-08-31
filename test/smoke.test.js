@@ -42,7 +42,7 @@ test("full day: cron message -> tap both buttons -> /status shows 1/1", async ()
 
   calls.length = 0;
   await post(msg("/status"));
-  assert.match(last("sendMessage").text, /Bowls washed: 1\/1 days/);
+  assert.match(last("sendMessage").text, /Bowls done: 1\/1 days/);
 });
 
 test("late tap after midnight credits the day printed on the message, not today", async () => {
@@ -104,7 +104,7 @@ test("untouched day and untouched week both count as missed in /status", async (
   calls.length = 0;
   await post(msg("/status"));
   const t = last("sendMessage").text;
-  assert.match(t, /Bowls washed: 0\/1 days/);
+  assert.match(t, /Bowls done: 0\/1 days/);
   assert.match(t, /Missed: 1 days \(100%\)/);
   assert.match(t, /Baths done: 0\/1 weeks/);
 });

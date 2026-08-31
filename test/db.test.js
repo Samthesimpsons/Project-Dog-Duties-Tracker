@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { db, getBowl, getStats, toggleBath, toggleBowl } from "../api/lib/db.js";
+import { db, getBath, getBowl, getStats, toggleBath, toggleBowl } from "../api/lib/db.js";
 
 test.beforeEach(async () => {
   await db.batch(["DELETE FROM bowls", "DELETE FROM baths"], "write").catch(() => {});
 });
 
 test("getBowl creates a blank row; toggleBowl flips items independently", async () => {
-  assert.deepEqual({ ...(await getBowl("2026-08-18")) }, { water: 0, food: 0 });
+  assert.deepEqual({ ...(await getBowl("2026-08-18")) }, { water: 0, food: 0, skipped: 0 });
   let s = await toggleBowl("2026-08-18", "water");
   assert.equal(s.water, 1);
   assert.equal(s.food, 0);
@@ -20,9 +20,30 @@ test("getBowl creates a blank row; toggleBowl flips items independently", async 
 });
 
 test("toggleBath flips per week", async () => {
-  assert.equal(await toggleBath("2026-W34"), true);
-  assert.equal(await toggleBath("2026-W34"), false);
-  assert.equal(await toggleBath("2026-W35"), true);
+  assert.deepEqual(await toggleBath("2026-W34"), { done: true, skipped: false });
+  assert.deepEqual(await toggleBath("2026-W34"), { done: false, skipped: false });
+  assert.deepEqual(await toggleBath("2026-W35"), { done: true, skipped: false });
+});
+
+test("skip toggles independently of done on bowls", async () => {
+  let s = await toggleBowl("2026-08-18", "skip");
+  assert.deepEqual({ ...s }, { water: 0, food: 0, skipped: 1 });
+  s = await toggleBowl("2026-08-18", "water");
+  assert.deepEqual({ ...s }, { water: 1, food: 0, skipped: 1 });
+  s = await toggleBowl("2026-08-18", "skip");
+  assert.deepEqual({ ...s }, { water: 1, food: 0, skipped: 0 });
+});
+
+test("toggleBowl falls back to food for unknown items", async () => {
+  const s = await toggleBowl("2026-08-18", "mystery");
+  assert.deepEqual({ ...s }, { water: 0, food: 1, skipped: 0 });
+});
+
+test("skip toggles independently of done on baths", async () => {
+  assert.deepEqual(await toggleBath("2026-W34", "skip"), { done: false, skipped: true });
+  assert.deepEqual(await toggleBath("2026-W34"), { done: true, skipped: true });
+  assert.deepEqual(await toggleBath("2026-W34", "skip"), { done: true, skipped: false });
+  assert.deepEqual(await getBath("2026-W34"), { done: true, skipped: false });
 });
 
 test("getStats: null with no data, otherwise one session per day", async () => {
@@ -79,6 +100,41 @@ test("getStats: bath before any bowl starts the window; baths outside 30 days ig
   assert.equal(s.trackedWeeks, 5); // W30..W34
   assert.equal(s.bathsDone, 1);
   assert.equal(s.bathsMissed, 4);
+});
+
+test("getStats: a skipped day counts as done and is reported separately", async () => {
+  await toggleBowl("2026-08-21", "water");
+  await toggleBowl("2026-08-21", "food"); // done
+  await toggleBowl("2026-08-22", "skip"); // skipped -> counts as done
+  await getBowl("2026-08-23"); // untouched -> missed
+  const s = await getStats("2026-08-23");
+  assert.equal(s.trackedDays, 3);
+  assert.equal(s.doneDays, 2);
+  assert.equal(s.missedDays, 1);
+  assert.equal(s.donePct, 67);
+  assert.equal(s.skippedDays, 1);
+  assert.equal(s.skippedPct, 33);
+});
+
+test("getStats: a day both ticked and skipped counts once", async () => {
+  await toggleBowl("2026-08-21", "water");
+  await toggleBowl("2026-08-21", "food");
+  await toggleBowl("2026-08-21", "skip");
+  const s = await getStats("2026-08-21");
+  assert.equal(s.trackedDays, 1);
+  assert.equal(s.doneDays, 1);
+  assert.equal(s.missedDays, 0);
+  assert.equal(s.skippedDays, 1);
+});
+
+test("getStats: a skipped week counts as a bath done", async () => {
+  await toggleBath("2026-W35", "skip"); // week of Sat 2026-08-22
+  const s = await getStats("2026-08-23");
+  assert.equal(s.trackedWeeks, 1);
+  assert.equal(s.bathsDone, 1);
+  assert.equal(s.bathsMissed, 0);
+  assert.equal(s.bathsSkipped, 1);
+  assert.equal(s.bathSkippedPct, 100);
 });
 
 test("getStats window is capped at 30 days", async () => {

@@ -29,7 +29,11 @@ test("bowl cron sends checklist with bowl:* callback data to CHAT_ID", async () 
   assert.equal(payload.chat_id, "12345");
   assert.match(payload.text, /wash the bowls/);
   const data = payload.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
-  assert.deepEqual(data, [`bowl:water:${todayKey()}`, `bowl:food:${todayKey()}`]);
+  assert.deepEqual(data, [
+    `bowl:water:${todayKey()}`,
+    `bowl:food:${todayKey()}`,
+    `bowl:skip:${todayKey()}`,
+  ]);
 });
 
 test("bath cron sends checklist with bath:done callback data", async () => {
@@ -39,6 +43,26 @@ test("bath cron sends checklist with bath:done callback data", async () => {
   const { payload } = calls[0];
   assert.match(payload.text, /bath time/);
   assert.equal(payload.reply_markup.inline_keyboard[0][0].callback_data, `bath:done:${weekKey()}`);
+});
+
+test("crons render the skip button", async () => {
+  await bowls({ headers: { authorization: "Bearer cron-secret" } }, mockRes());
+  await bath({ headers: { authorization: "Bearer cron-secret" } }, mockRes());
+  const bowlSkip = calls[0].payload.reply_markup.inline_keyboard[1][0];
+  assert.equal(bowlSkip.text, "⬜ Skip today");
+  assert.equal(bowlSkip.callback_data, `bowl:skip:${todayKey()}`);
+  const bathSkip = calls[1].payload.reply_markup.inline_keyboard[1][0];
+  assert.equal(bathSkip.text, "⬜ Skip this week");
+  assert.equal(bathSkip.callback_data, `bath:skip:${weekKey()}`);
+});
+
+test("crons reflect an already-skipped day/week", async () => {
+  await toggleBowl(todayKey(), "skip");
+  await toggleBath(weekKey(), "skip");
+  await bowls({ headers: { authorization: "Bearer cron-secret" } }, mockRes());
+  await bath({ headers: { authorization: "Bearer cron-secret" } }, mockRes());
+  assert.equal(calls[0].payload.reply_markup.inline_keyboard[1][0].text, "✅ Skip today");
+  assert.equal(calls[1].payload.reply_markup.inline_keyboard[1][0].text, "✅ Skip this week");
 });
 
 test("crons reflect state already ticked earlier that day/week", async () => {
