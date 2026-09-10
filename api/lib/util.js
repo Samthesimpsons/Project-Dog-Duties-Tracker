@@ -49,14 +49,29 @@ export function weekStartOf(key) {
   return mon.toISOString().slice(0, 10);
 }
 
-/** Human date like "Tue 18 Aug" in the user's local day */
-export function prettyDate(base = new Date()) {
-  return localNow(base).toLocaleDateString("en-GB", {
+/** Human date like "Tue 18 Aug" for a "YYYY-MM-DD" key */
+export function prettyKey(key) {
+  return new Date(key).toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
     timeZone: "UTC",
   });
+}
+
+/** Human date like "Tue 18 Aug" in the user's local day */
+export function prettyDate(base = new Date()) {
+  return prettyKey(todayKey(base));
+}
+
+/**
+ * Validate a user-typed "YYYY-MM-DD" (e.g. from "/bowls 2026-08-18").
+ * Returns the key, or null if it isn't a real calendar date.
+ */
+export function parseDateArg(arg) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(arg)) return null;
+  const t = Date.parse(arg);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === arg ? arg : null;
 }
 
 /** Minimal Telegram Bot API caller */

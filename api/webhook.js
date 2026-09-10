@@ -1,6 +1,15 @@
 import { getBath, getBowl, getStats, toggleBath, toggleBowl } from "./lib/db.js";
 import { bathKeyboard, bowlKeyboard } from "./lib/keyboard.js";
-import { CHAT_ID, tg, todayKey, weekKey } from "./lib/util.js";
+import {
+  bathWeek,
+  CHAT_ID,
+  parseDateArg,
+  prettyKey,
+  tg,
+  todayKey,
+  weekKey,
+  weekStartOf,
+} from "./lib/util.js";
 
 async function handleCallback(cb) {
   try {
@@ -36,6 +45,18 @@ async function handleCallback(cb) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
   }
 }
+
+const HELP = [
+  "🐶 Commands",
+  "",
+  "/bowls - today's bowl checklist",
+  "/bowls YYYY-MM-DD - bowl checklist for that day",
+  "/bath - this week's bath checklist",
+  "/bath YYYY-MM-DD - bath checklist for the week (Sat-Fri) containing that day",
+  "/status - bowl & bath stats for the last 30 days",
+  "/id - show your chat id",
+  "/help - this list",
+].join("\n");
 
 async function handleStatus(chatId) {
   const stats = await getStats(todayKey());
@@ -85,26 +106,38 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      const text = update.message.text.trim();
-      if (text === "/status" || text === "/stats") {
+      // "/bowls 2026-08-18" -> cmd "/bowls", arg "2026-08-18"; bare "/bowls" -> arg undefined
+      const [cmd, arg] = update.message.text.trim().split(/\s+/);
+      const date = arg === undefined ? todayKey() : parseDateArg(arg);
+
+      if (cmd === "/status" || cmd === "/stats") {
         await handleStatus(chatId);
-      } else if (text === "/bowls") {
-        const date = todayKey();
-        const state = await getBowl(date);
-        await tg("sendMessage", {
-          chat_id: chatId,
-          text: "☀️ Wash the bowls:",
-          reply_markup: bowlKeyboard(state, date),
-        });
-      } else if (text === "/bath") {
-        const week = weekKey();
-        const state = await getBath(week);
-        await tg("sendMessage", {
-          chat_id: chatId,
-          text: "🛁 Bath time:",
-          reply_markup: bathKeyboard(state, week),
-        });
-      } else if (text === "/id") {
+      } else if (cmd === "/bowls") {
+        if (!date) {
+          await tg("sendMessage", { chat_id: chatId, text: "Usage: /bowls [YYYY-MM-DD]" });
+        } else {
+          const state = await getBowl(date);
+          await tg("sendMessage", {
+            chat_id: chatId,
+            text: `☀️ ${prettyKey(date)} - wash the bowls:`,
+            reply_markup: bowlKeyboard(state, date),
+          });
+        }
+      } else if (cmd === "/bath") {
+        if (!date) {
+          await tg("sendMessage", { chat_id: chatId, text: "Usage: /bath [YYYY-MM-DD]" });
+        } else {
+          const week = bathWeek(date);
+          const state = await getBath(week);
+          await tg("sendMessage", {
+            chat_id: chatId,
+            text: `🛁 Week of ${prettyKey(weekStartOf(week))} - bath time:`,
+            reply_markup: bathKeyboard(state, week),
+          });
+        }
+      } else if (cmd === "/help") {
+        await tg("sendMessage", { chat_id: chatId, text: HELP });
+      } else if (cmd === "/id") {
         await tg("sendMessage", { chat_id: chatId, text: `Your chat id: ${chatId}` });
       }
     }

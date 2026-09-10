@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bathWeek, isoWeek, prettyDate, todayKey, weekKey, weekStartOf } from "../api/lib/util.js";
+import {
+  bathWeek,
+  isoWeek,
+  parseDateArg,
+  prettyDate,
+  prettyKey,
+  todayKey,
+  weekKey,
+  weekStartOf,
+} from "../api/lib/util.js";
 
 test("todayKey flips at Singapore midnight, not UTC", () => {
   // 2026-08-18 15:59 UTC = 23:59 SGT  -> still the 18th
@@ -36,4 +45,17 @@ test("bathWeek accepts date strings; weekStartOf gives the week's Saturday", () 
   assert.equal(weekStartOf("2026-W35"), "2026-08-22");
   assert.equal(weekStartOf("2026-W01"), "2025-12-27");
   assert.equal(weekStartOf(bathWeek("2027-01-02")), "2027-01-02"); // a Saturday starts its own week
+});
+
+test("prettyKey formats a YYYY-MM-DD key", () => {
+  assert.equal(prettyKey("2026-08-18"), "Tue 18 Aug");
+});
+
+test("parseDateArg accepts real YYYY-MM-DD dates only", () => {
+  assert.equal(parseDateArg("2026-08-18"), "2026-08-18");
+  assert.equal(parseDateArg("2026-02-30"), null); // not a real day
+  assert.equal(parseDateArg("2026-13-01"), null);
+  assert.equal(parseDateArg("18-08-2026"), null);
+  assert.equal(parseDateArg("2026-8-18"), null);
+  assert.equal(parseDateArg("yesterday"), null);
 });

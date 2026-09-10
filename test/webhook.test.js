@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { db } from "../api/lib/db.js";
-import { todayKey } from "../api/lib/util.js";
+import { todayKey, weekKey } from "../api/lib/util.js";
 import handler from "../api/webhook.js";
 import { calls, mockRes } from "./helpers.js";
 
@@ -143,4 +143,96 @@ test("/status shows Skipped: lines under the Missed: lines", async () => {
   assert.match(t, /Missed: 0 days \(0%\)\nSkipped: 1 days \(100%\)/);
   assert.match(t, /Baths done: 1\/1 weeks/);
   assert.match(t, /Missed: 0 weeks \(0%\)\nSkipped: 1 weeks \(100%\)/);
+});
+
+test("/bowls YYYY-MM-DD opens that day's checklist and buttons carry the date", async () => {
+  await post(cb("bowl:water:2026-08-18"));
+  calls.length = 0;
+  await post(msg("/bowls 2026-08-18"));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.text, "☀️ Tue 18 Aug - wash the bowls:");
+  const [water, food] = calls[0].payload.reply_markup.inline_keyboard[0];
+  assert.equal(water.text, "✅ Water bowl");
+  assert.equal(water.callback_data, "bowl:water:2026-08-18");
+  assert.equal(food.callback_data, "bowl:food:2026-08-18");
+
+  // ticking from that message writes to the given date, not today
+  calls.length = 0;
+  await post(cb("bowl:food:2026-08-18", "☀️ Tue 18 Aug - wash the bowls:"));
+  const edit = calls.find((c) => c.method === "editMessageText").payload;
+  assert.equal(edit.text, "☀️ Tue 18 Aug - wash the bowls: 🎉");
+  const rows = await db.execute("SELECT date, water, food FROM bowls ORDER BY date");
+  assert.deepEqual(
+    rows.rows.map((r) => [r.date, r.water, r.food]),
+    [["2026-08-18", 1, 1]],
+  );
+});
+
+test("/bath YYYY-MM-DD opens the Sat-Fri week containing that day", async () => {
+  await post(msg("/bath 2026-08-26")); // a Wednesday -> week starting Sat 22 Aug
+  assert.equal(calls[0].payload.text, "🛁 Week of Sat 22 Aug - bath time:");
+  assert.equal(
+    calls[0].payload.reply_markup.inline_keyboard[0][0].callback_data,
+    "bath:done:2026-W35",
+  );
+  calls.length = 0;
+  await post(msg("/bath 2026-08-22")); // the Saturday itself is in the same week
+  assert.equal(
+    calls[0].payload.reply_markup.inline_keyboard[0][0].callback_data,
+    "bath:done:2026-W35",
+  );
+  calls.length = 0;
+  await post(msg("/bath 2026-08-21")); // the Friday before belongs to the previous week
+  assert.equal(
+    calls[0].payload.reply_markup.inline_keyboard[0][0].callback_data,
+    "bath:done:2026-W34",
+  );
+});
+
+test("bare /bowls and /bath still use today / this week", async () => {
+  await post(msg("/bowls"));
+  await post(msg("/bath"));
+  assert.equal(
+    calls[0].payload.reply_markup.inline_keyboard[0][0].callback_data,
+    `bowl:water:${todayKey()}`,
+  );
+  assert.equal(
+    calls[1].payload.reply_markup.inline_keyboard[0][0].callback_data,
+    `bath:done:${weekKey()}`,
+  );
+});
+
+test("bad date args reply with usage and write nothing", async () => {
+  for (const [text, usage] of [
+    ["/bowls 2026-02-30", "Usage: /bowls [YYYY-MM-DD]"],
+    ["/bowls yesterday", "Usage: /bowls [YYYY-MM-DD]"],
+    ["/bath 22/08/2026", "Usage: /bath [YYYY-MM-DD]"],
+  ]) {
+    calls.length = 0;
+    await post(msg(text));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].payload.text, usage);
+    assert.equal(calls[0].payload.reply_markup, undefined);
+  }
+  const bowls = await db.execute("SELECT COUNT(*) AS n FROM bowls");
+  const baths = await db.execute("SELECT COUNT(*) AS n FROM baths");
+  assert.equal(Number(bowls.rows[0].n), 0);
+  assert.equal(Number(baths.rows[0].n), 0);
+});
+
+test("/help lists every command", async () => {
+  await post(msg("/help"));
+  assert.equal(calls.length, 1);
+  const t = calls[0].payload.text;
+  for (const c of [
+    "/bowls",
+    "/bowls YYYY-MM-DD",
+    "/bath",
+    "/bath YYYY-MM-DD",
+    "/status",
+    "/id",
+    "/help",
+  ]) {
+    assert.ok(t.includes(`${c} - `), `help is missing ${c}`);
+  }
 });

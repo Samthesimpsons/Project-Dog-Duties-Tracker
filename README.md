@@ -12,12 +12,19 @@ doesn't show up as a missed chore.
 
 ## Commands
 
-| Command   | What it does                                          |
-|-----------|-------------------------------------------------------|
-| `/status` | % of days & weeks done (incl. skipped) / missed / skipped |
-| `/bowls`  | Summon today's bowl checklist on demand               |
-| `/bath`   | Summon this week's bath checklist on demand           |
-| `/id`     | Show your chat id (setup only)                        |
+| Command             | What it does                                                      |
+|---------------------|-------------------------------------------------------------------|
+| `/status`           | % of days & weeks done (incl. skipped) / missed / skipped         |
+| `/bowls`            | Summon today's bowl checklist on demand                           |
+| `/bowls YYYY-MM-DD` | Reopen the bowl checklist for that day (e.g. a day you forgot)    |
+| `/bath`             | Summon this week's bath checklist on demand                       |
+| `/bath YYYY-MM-DD`  | Reopen the bath checklist for the Sat-Fri week containing that day |
+| `/help`             | List all commands                                                 |
+| `/id`               | Show your chat id (setup only)                                    |
+
+A dated checklist's buttons write to that date/week, so you can tick or skip
+past days without touching today. A malformed or impossible date replies with a
+usage hint.
 
 `/status` example:
 
@@ -43,8 +50,9 @@ Skipped: 1 weeks (20%)
 3. Optional: `/setcommands` > pick your bot > paste:
    ```
    status - Bowl and bath completion stats
-   bowls - Today's bowl checklist
-   bath - This week's bath checklist
+   bowls - Bowl checklist for today, or a given YYYY-MM-DD
+   bath - Bath checklist for this week, or the week of a given YYYY-MM-DD
+   help - List all commands
    id - Show chat id
    ```
 
@@ -87,7 +95,8 @@ Expect `{"ok":true, ... "Webhook was set"}`.
 
 ### 6. Verify
 - `/bowls` > checklist appears; tapping buttons toggles ✅ and adds 🎉 when both done, or ⏭️ when the day is skipped.
-- `/status` > stats.
+- `/bowls 2026-08-18` > that day's checklist, headed with its date.
+- `/status` > stats; `/help` > command list.
 - Vercel > **Settings > Cron Jobs** lists `/api/cron/bowls` and `/api/cron/bath`; use *Run* there to fire one manually.
 - Problems? Check **Logs** for `/api/webhook`: a 401 means the webhook secret doesn't match; no logs at all means the webhook URL is wrong.
 
