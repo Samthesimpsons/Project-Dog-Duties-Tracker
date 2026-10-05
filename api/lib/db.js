@@ -39,10 +39,18 @@ export async function ensureSchema() {
   for (const [table, cols] of Object.entries(migrations)) {
     const info = await db.execute(`PRAGMA table_info(${table})`);
     const existing = new Set(info.rows.map((r) => r.name));
+    const added = [];
     for (const col of cols) {
       if (!existing.has(col)) {
         await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+        added.push(col);
       }
+    }
+    // Days already completed (water+food) before bible/leetcode existed
+    // shouldn't retroactively flip to "not done" just because the new
+    // columns default to 0. Backfill them once, right when they're added.
+    if (table === "bowls" && (added.includes("bible") || added.includes("leetcode"))) {
+      await db.execute("UPDATE bowls SET bible = 1, leetcode = 1 WHERE water = 1 AND food = 1");
     }
   }
   ready = true;
