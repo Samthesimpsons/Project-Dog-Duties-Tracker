@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { bathWeek, weekStartOf } from "./util.js";
+import { bathWeek, todayKey, weekStartOf } from "./util.js";
 
 export const db = createClient({
   url: process.env.TURSO_DATABASE_URL,
@@ -30,6 +30,10 @@ export async function ensureSchema() {
          done INTEGER NOT NULL DEFAULT 0,
          skipped INTEGER NOT NULL DEFAULT 0
        )`,
+      `CREATE TABLE IF NOT EXISTS meta (
+         key   TEXT PRIMARY KEY,
+         value TEXT NOT NULL
+       )`,
     ],
     "write",
   );
@@ -39,20 +43,19 @@ export async function ensureSchema() {
   for (const [table, cols] of Object.entries(migrations)) {
     const info = await db.execute(`PRAGMA table_info(${table})`);
     const existing = new Set(info.rows.map((r) => r.name));
-    const added = [];
     for (const col of cols) {
       if (!existing.has(col)) {
         await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
-        added.push(col);
       }
     }
-    // Days already completed (water+food) before bible/leetcode existed
-    // shouldn't retroactively flip to "not done" just because the new
-    // columns default to 0. Backfill them once, right when they're added.
-    if (table === "bowls" && (added.includes("bible") || added.includes("leetcode"))) {
-      await db.execute("UPDATE bowls SET bible = 1, leetcode = 1 WHERE water = 1 AND food = 1");
-    }
   }
+  // Bible/leetcode have no history before they existed; record the first day
+  // seen so their stats start from there instead of from the first bowl row.
+  // INSERT OR IGNORE means this only ever takes effect the first time.
+  await db.execute({
+    sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('habitsStart', ?)",
+    args: [todayKey()],
+  });
   ready = true;
 }
 
@@ -125,19 +128,46 @@ export async function toggleBath(week, item) {
   return { done: r.rows[0].done === 1, skipped: r.rows[0].skipped === 1 };
 }
 
+/** Tracked-days/done/missed/skipped breakdown for one "done" SQL condition. */
+async function columnStats(doneExpr, start, todayStr) {
+  const trackedDays = Math.round((Date.parse(todayStr) - Date.parse(start)) / 86400000) + 1;
+  const r = await db.execute({
+    sql: `SELECT
+            SUM(CASE WHEN (${doneExpr}) OR skipped = 1 THEN 1 ELSE 0 END) AS done,
+            SUM(CASE WHEN skipped = 1 THEN 1 ELSE 0 END) AS skipped
+          FROM bowls WHERE date >= ? AND date <= ?`,
+    args: [start, todayStr],
+  });
+  const doneDays = Number(r.rows[0].done ?? 0);
+  const skippedDays = Number(r.rows[0].skipped ?? 0);
+  return {
+    trackedDays,
+    doneDays,
+    missedDays: trackedDays - doneDays,
+    missedPct: Math.round(((trackedDays - doneDays) / trackedDays) * 100),
+    donePct: Math.round((doneDays / trackedDays) * 100),
+    skippedDays,
+    skippedPct: Math.round((skippedDays / trackedDays) * 100),
+  };
+}
+
 /**
  * Stats over the last `days` days (default 30), starting no earlier than the
  * first day the bot was used - so untracked history doesn't count as "missed".
- * A day counts as done if BOTH bowls were ticked or the day was skipped
- * (a day that is both ticked and skipped counts once); skipped days and weeks
- * are also tallied separately. Bath weeks are the Sat..Fri weeks touched by
- * the same window.
+ * Bowls, bible and leetcode are each tracked separately (a day counts as done
+ * for a given one if that item was ticked, or the day was skipped); skipped
+ * days and weeks are also tallied separately. Bible/leetcode have no history
+ * before they were added, so their window starts there instead. Bath weeks
+ * are the Sat..Fri weeks touched by the same window.
  */
 export async function getStats(todayStr, days = 30) {
   await ensureSchema();
 
   const firstBowl = (await db.execute("SELECT MIN(date) AS d FROM bowls")).rows[0]?.d;
   const firstBathWeek = (await db.execute("SELECT MIN(week) AS w FROM baths")).rows[0]?.w;
+  const habitsStart = (
+    await db.execute("SELECT value FROM meta WHERE key = 'habitsStart'")
+  ).rows[0]?.value;
   // Days are tracked from the first bowl checklist; if there is none yet, from
   // the week of the first bath. Weeks additionally reach back to the first bath.
   const firstDate = firstBowl ?? (firstBathWeek && weekStartOf(firstBathWeek));
@@ -147,18 +177,11 @@ export async function getStats(todayStr, days = 30) {
     .toISOString()
     .slice(0, 10);
   const start = firstDate > windowStart ? firstDate : windowStart;
+  const habitStart = [habitsStart ?? start, start].sort().pop();
 
-  const trackedDays = Math.round((Date.parse(todayStr) - Date.parse(start)) / 86400000) + 1;
-  const done = await db.execute({
-    sql: `SELECT
-            SUM(CASE WHEN (water = 1 AND food = 1 AND bible = 1 AND leetcode = 1) OR skipped = 1
-                     THEN 1 ELSE 0 END) AS done,
-            SUM(CASE WHEN skipped = 1 THEN 1 ELSE 0 END) AS skipped
-          FROM bowls WHERE date >= ? AND date <= ?`,
-    args: [start, todayStr],
-  });
-  const doneDays = Number(done.rows[0].done ?? 0);
-  const skippedDays = Number(done.rows[0].skipped ?? 0);
+  const bowls = await columnStats("water = 1 AND food = 1", start, todayStr);
+  const bible = await columnStats("bible = 1", habitStart, todayStr);
+  const leetcode = await columnStats("leetcode = 1", habitStart, todayStr);
 
   const bathStart = firstBathWeek ? weekStartOf(firstBathWeek) : start;
   const weekStart = [bathStart < start ? bathStart : start, windowStart].sort()[1];
@@ -179,13 +202,9 @@ export async function getStats(todayStr, days = 30) {
 
   return {
     start,
-    trackedDays,
-    doneDays,
-    missedDays: trackedDays - doneDays,
-    missedPct: Math.round(((trackedDays - doneDays) / trackedDays) * 100),
-    donePct: Math.round((doneDays / trackedDays) * 100),
-    skippedDays,
-    skippedPct: Math.round((skippedDays / trackedDays) * 100),
+    bowls,
+    bible,
+    leetcode,
     trackedWeeks,
     bathsDone,
     bathsMissed: trackedWeeks - bathsDone,

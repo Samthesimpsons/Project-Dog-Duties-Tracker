@@ -37,9 +37,7 @@ async function handleCallback(cb) {
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text:
-          base +
-          marker(state.water && state.food && state.bible && state.leetcode, state.skipped),
+        text: base + marker(state.water && state.food, state.skipped),
         reply_markup: bowlKeyboard(state, date),
       });
     }
@@ -73,13 +71,20 @@ async function handleStatus(chatId) {
     const filled = Math.round(pct / 10);
     return "█".repeat(filled) + "░".repeat(10 - filled);
   };
+  const section = (emoji, label, s) => [
+    `${emoji} ${label}: ${s.doneDays}/${s.trackedDays} days`,
+    `${bar(s.donePct)} ${s.donePct}% done`,
+    `Missed: ${s.missedDays} days (${s.missedPct}%)`,
+    `Skipped: ${s.skippedDays} days (${s.skippedPct}%)`,
+  ];
   const text = [
-    `📊 Last ${stats.trackedDays} day(s) (since ${stats.start})`,
+    `📊 Last ${stats.bowls.trackedDays} day(s) (since ${stats.start})`,
     ``,
-    `Bowls done: ${stats.doneDays}/${stats.trackedDays} days`,
-    `${bar(stats.donePct)} ${stats.donePct}% done`,
-    `Missed: ${stats.missedDays} days (${stats.missedPct}%)`,
-    `Skipped: ${stats.skippedDays} days (${stats.skippedPct}%)`,
+    ...section("🥣", "Bowls done", stats.bowls),
+    ``,
+    ...section("📖", "Bible done", stats.bible),
+    ``,
+    ...section("💻", "LeetCode done", stats.leetcode),
     ``,
     `🛁 Baths done: ${stats.bathsDone}/${stats.trackedWeeks} weeks`,
     `${bar(stats.bathDonePct)} ${stats.bathDonePct}% done`,
