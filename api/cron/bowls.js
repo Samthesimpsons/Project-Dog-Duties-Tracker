@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const state = await getBowl(date);
   await tg("sendMessage", {
     chat_id: CHAT_ID,
-    text: `☀️ ${prettyDate()} - daily checklist:`,
+    text: `${prettyDate()} - Daily activities: ☀️`,
     reply_markup: bowlKeyboard(state, date),
   });
   return res.status(200).json({ ok: true });
