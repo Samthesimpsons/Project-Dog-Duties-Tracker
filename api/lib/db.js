@@ -20,14 +20,22 @@ export async function ensureSchema() {
          slot  TEXT NOT NULL CHECK (slot IN ('morning','evening')),
          water INTEGER NOT NULL DEFAULT 0,
          food  INTEGER NOT NULL DEFAULT 0,
-         bible INTEGER NOT NULL DEFAULT 0,
-         leetcode INTEGER NOT NULL DEFAULT 0,
          skipped INTEGER NOT NULL DEFAULT 0,
          PRIMARY KEY (date, slot)
        )`,
       `CREATE TABLE IF NOT EXISTS baths (
          week TEXT PRIMARY KEY,
          done INTEGER NOT NULL DEFAULT 0,
+         skipped INTEGER NOT NULL DEFAULT 0
+       )`,
+      `CREATE TABLE IF NOT EXISTS leetcode (
+         date    TEXT PRIMARY KEY,
+         done    INTEGER NOT NULL DEFAULT 0,
+         skipped INTEGER NOT NULL DEFAULT 0
+       )`,
+      `CREATE TABLE IF NOT EXISTS bible (
+         date    TEXT PRIMARY KEY,
+         done    INTEGER NOT NULL DEFAULT 0,
          skipped INTEGER NOT NULL DEFAULT 0
        )`,
       `CREATE TABLE IF NOT EXISTS meta (
@@ -37,9 +45,8 @@ export async function ensureSchema() {
     ],
     "write",
   );
-  // Databases created before the skip/bible/leetcode columns existed lack
-  // them; add any that are missing in place.
-  const migrations = { bowls: ["bible", "leetcode", "skipped"], baths: ["skipped"] };
+  // Databases created before the skip column existed lack it; add it in place.
+  const migrations = { bowls: ["skipped"], baths: ["skipped"] };
   for (const [table, cols] of Object.entries(migrations)) {
     const info = await db.execute(`PRAGMA table_info(${table})`);
     const existing = new Set(info.rows.map((r) => r.name));
@@ -49,13 +56,31 @@ export async function ensureSchema() {
       }
     }
   }
-  // Bible/leetcode have no history before they existed; record the first day
-  // seen so their stats start from there instead of from the first bowl row.
-  // INSERT OR IGNORE means this only ever takes effect the first time.
-  await db.execute({
-    sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('habitsStart', ?)",
-    args: [todayKey()],
-  });
+  // Bible/leetcode briefly lived as columns on bowls before becoming their
+  // own tables; move today's row over (the only day that design was live)
+  // so it isn't lost. Guarded by a meta flag so it only ever runs once.
+  const splitDone = (
+    await db.execute("SELECT value FROM meta WHERE key = 'splitBibleLeetcode'")
+  ).rows[0];
+  if (!splitDone) {
+    const bowlsCols = new Set(
+      (await db.execute("PRAGMA table_info(bowls)")).rows.map((r) => r.name),
+    );
+    const today = todayKey();
+    if (bowlsCols.has("leetcode")) {
+      await db.execute({
+        sql: "INSERT OR IGNORE INTO leetcode (date, done, skipped) SELECT date, leetcode, skipped FROM bowls WHERE date = ?",
+        args: [today],
+      });
+    }
+    if (bowlsCols.has("bible")) {
+      await db.execute({
+        sql: "INSERT OR IGNORE INTO bible (date, done, skipped) SELECT date, bible, skipped FROM bowls WHERE date = ?",
+        args: [today],
+      });
+    }
+    await db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('splitBibleLeetcode', '1')");
+  }
   ready = true;
 }
 
@@ -63,10 +88,7 @@ export async function ensureSchema() {
 export async function toggleBowl(date, item) {
   await ensureSchema();
   // Fall back to "food" so buttons in older Telegram messages keep working.
-  const col =
-    { water: "water", food: "food", bible: "bible", leetcode: "leetcode", skip: "skipped" }[
-      item
-    ] ?? "food";
+  const col = { water: "water", food: "food", skip: "skipped" }[item] ?? "food";
   await db.batch(
     [
       {
@@ -81,7 +103,7 @@ export async function toggleBowl(date, item) {
     "write",
   );
   const r = await db.execute({
-    sql: "SELECT water, food, bible, leetcode, skipped FROM bowls WHERE date = ? AND slot = ?",
+    sql: "SELECT water, food, skipped FROM bowls WHERE date = ? AND slot = ?",
     args: [date, SLOT],
   });
   return r.rows[0];
@@ -95,11 +117,41 @@ export async function getBowl(date) {
     args: [date, SLOT],
   });
   const r = await db.execute({
-    sql: "SELECT water, food, bible, leetcode, skipped FROM bowls WHERE date = ? AND slot = ?",
+    sql: "SELECT water, food, skipped FROM bowls WHERE date = ? AND slot = ?",
     args: [date, SLOT],
   });
   return r.rows[0];
 }
+
+/** Read (creating if absent) the state for `date` on a done+skipped table. */
+async function getDaily(table, date) {
+  await ensureSchema();
+  await db.execute({ sql: `INSERT OR IGNORE INTO ${table} (date) VALUES (?)`, args: [date] });
+  const r = await db.execute({
+    sql: `SELECT done, skipped FROM ${table} WHERE date = ?`,
+    args: [date],
+  });
+  return { done: r.rows[0].done === 1, skipped: r.rows[0].skipped === 1 };
+}
+
+/** Ensure a row exists for `date`, then flip one item, on a done+skipped table. */
+async function toggleDaily(table, date, item) {
+  await ensureSchema();
+  const col = item === "skip" ? "skipped" : "done";
+  await db.batch(
+    [
+      { sql: `INSERT OR IGNORE INTO ${table} (date) VALUES (?)`, args: [date] },
+      { sql: `UPDATE ${table} SET ${col} = 1 - ${col} WHERE date = ?`, args: [date] },
+    ],
+    "write",
+  );
+  return getDaily(table, date);
+}
+
+export const getLeetcode = (date) => getDaily("leetcode", date);
+export const toggleLeetcode = (date, item) => toggleDaily("leetcode", date, item);
+export const getBible = (date) => getDaily("bible", date);
+export const toggleBible = (date, item) => toggleDaily("bible", date, item);
 
 export async function getBath(week) {
   await ensureSchema();
@@ -128,14 +180,14 @@ export async function toggleBath(week, item) {
   return { done: r.rows[0].done === 1, skipped: r.rows[0].skipped === 1 };
 }
 
-/** Tracked-days/done/missed/skipped breakdown for one "done" SQL condition. */
-async function columnStats(doneExpr, start, todayStr) {
+/** Tracked-days/done/missed/skipped breakdown for one table's "done" condition. */
+async function columnStats(table, doneExpr, start, todayStr) {
   const trackedDays = Math.round((Date.parse(todayStr) - Date.parse(start)) / 86400000) + 1;
   const r = await db.execute({
     sql: `SELECT
             SUM(CASE WHEN (${doneExpr}) OR skipped = 1 THEN 1 ELSE 0 END) AS done,
             SUM(CASE WHEN skipped = 1 THEN 1 ELSE 0 END) AS skipped
-          FROM bowls WHERE date >= ? AND date <= ?`,
+          FROM ${table} WHERE date >= ? AND date <= ?`,
     args: [start, todayStr],
   });
   const doneDays = Number(r.rows[0].done ?? 0);
@@ -153,21 +205,19 @@ async function columnStats(doneExpr, start, todayStr) {
 
 /**
  * Stats over the last `days` days (default 30), starting no earlier than the
- * first day the bot was used - so untracked history doesn't count as "missed".
- * Bowls, bible and leetcode are each tracked separately (a day counts as done
- * for a given one if that item was ticked, or the day was skipped); skipped
- * days and weeks are also tallied separately. Bible/leetcode have no history
- * before they were added, so their window starts there instead. Bath weeks
- * are the Sat..Fri weeks touched by the same window.
+ * first day each thing was tracked - so untracked history doesn't count as
+ * "missed". Bowls, bible and leetcode are each independent (a day counts as
+ * done for one of them if that item was ticked, or that day was skipped on
+ * its own checklist); skipped days/weeks are also tallied separately. Bath
+ * weeks are the Sat..Fri weeks touched by the same window.
  */
 export async function getStats(todayStr, days = 30) {
   await ensureSchema();
 
   const firstBowl = (await db.execute("SELECT MIN(date) AS d FROM bowls")).rows[0]?.d;
   const firstBathWeek = (await db.execute("SELECT MIN(week) AS w FROM baths")).rows[0]?.w;
-  const habitsStart = (
-    await db.execute("SELECT value FROM meta WHERE key = 'habitsStart'")
-  ).rows[0]?.value;
+  const firstBible = (await db.execute("SELECT MIN(date) AS d FROM bible")).rows[0]?.d;
+  const firstLeetcode = (await db.execute("SELECT MIN(date) AS d FROM leetcode")).rows[0]?.d;
   // Days are tracked from the first bowl checklist; if there is none yet, from
   // the week of the first bath. Weeks additionally reach back to the first bath.
   const firstDate = firstBowl ?? (firstBathWeek && weekStartOf(firstBathWeek));
@@ -177,11 +227,15 @@ export async function getStats(todayStr, days = 30) {
     .toISOString()
     .slice(0, 10);
   const start = firstDate > windowStart ? firstDate : windowStart;
-  const habitStart = [habitsStart ?? start, start].sort().pop();
+  const clampToWindow = (d) => (d > windowStart ? d : windowStart);
 
-  const bowls = await columnStats("water = 1 AND food = 1", start, todayStr);
-  const bible = await columnStats("bible = 1", habitStart, todayStr);
-  const leetcode = await columnStats("leetcode = 1", habitStart, todayStr);
+  const bowls = await columnStats("bowls", "water = 1 AND food = 1", start, todayStr);
+  const bible = firstBible
+    ? await columnStats("bible", "done = 1", clampToWindow(firstBible), todayStr)
+    : null;
+  const leetcode = firstLeetcode
+    ? await columnStats("leetcode", "done = 1", clampToWindow(firstLeetcode), todayStr)
+    : null;
 
   const bathStart = firstBathWeek ? weekStartOf(firstBathWeek) : start;
   const weekStart = [bathStart < start ? bathStart : start, windowStart].sort()[1];

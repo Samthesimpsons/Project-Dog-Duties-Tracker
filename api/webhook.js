@@ -1,5 +1,15 @@
-import { getBath, getBowl, getStats, toggleBath, toggleBowl } from "./lib/db.js";
-import { bathKeyboard, bowlKeyboard } from "./lib/keyboard.js";
+import {
+  getBath,
+  getBible,
+  getBowl,
+  getLeetcode,
+  getStats,
+  toggleBath,
+  toggleBible,
+  toggleBowl,
+  toggleLeetcode,
+} from "./lib/db.js";
+import { bathKeyboard, bibleKeyboard, bowlKeyboard, leetcodeKeyboard } from "./lib/keyboard.js";
 import {
   bathWeek,
   CHAT_ID,
@@ -37,10 +47,26 @@ async function handleCallback(cb) {
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text:
-          base +
-          marker(state.water && state.food && state.bible && state.leetcode, state.skipped),
+        text: base + marker(state.water && state.food, state.skipped),
         reply_markup: bowlKeyboard(state, date),
+      });
+    } else if (kind === "leetcode") {
+      const date = key || todayKey();
+      const state = await toggleLeetcode(date, item);
+      await tg("editMessageText", {
+        chat_id: msg.chat.id,
+        message_id: msg.message_id,
+        text: base + marker(state.done, state.skipped),
+        reply_markup: leetcodeKeyboard(state, date),
+      });
+    } else if (kind === "bible") {
+      const date = key || todayKey();
+      const state = await toggleBible(date, item);
+      await tg("editMessageText", {
+        chat_id: msg.chat.id,
+        message_id: msg.message_id,
+        text: base + marker(state.done, state.skipped),
+        reply_markup: bibleKeyboard(state, date),
       });
     }
   } finally {
@@ -51,11 +77,15 @@ async function handleCallback(cb) {
 const HELP = [
   "🐶 Commands",
   "",
-  "/bowls - today's daily checklist",
-  "/bowls YYYY-MM-DD - daily checklist for that day",
+  "/bowls - today's bowl checklist",
+  "/bowls YYYY-MM-DD - bowl checklist for that day",
+  "/leetcode - today's LeetCode checklist",
+  "/leetcode YYYY-MM-DD - LeetCode checklist for that day",
+  "/bible - today's bible checklist",
+  "/bible YYYY-MM-DD - bible checklist for that day",
   "/bath - this week's bath checklist",
   "/bath YYYY-MM-DD - bath checklist for the week (Sat-Fri) containing that day",
-  "/status - bowl & bath stats for the last 30 days",
+  "/status - stats for the last 30 days",
   "/id - show your chat id",
   "/help - this list",
 ].join("\n");
@@ -84,9 +114,11 @@ async function handleStatus(chatId) {
     ``,
     ...section("🥣", "Bowls done", stats.bowls),
     ``,
-    ...section("📖", "Bible done", stats.bible),
+    ...(stats.bible ? section("📖", "Bible done", stats.bible) : ["📖 Bible: no data yet"]),
     ``,
-    ...section("💻", "LeetCode done", stats.leetcode),
+    ...(stats.leetcode
+      ? section("💻", "LeetCode done", stats.leetcode)
+      : ["💻 LeetCode: no data yet"]),
     ``,
     `🛁 Baths done: ${stats.bathsDone}/${stats.trackedWeeks} weeks`,
     `${bar(stats.bathDonePct)} ${stats.bathDonePct}% done`,
@@ -128,8 +160,30 @@ export default async function handler(req, res) {
           const state = await getBowl(date);
           await tg("sendMessage", {
             chat_id: chatId,
-            text: `${prettyKey(date)} - Daily activities: ☀️`,
+            text: `${prettyKey(date)} - Wash the bowls: 🥣`,
             reply_markup: bowlKeyboard(state, date),
+          });
+        }
+      } else if (cmd === "/leetcode") {
+        if (!date) {
+          await tg("sendMessage", { chat_id: chatId, text: "Usage: /leetcode [YYYY-MM-DD]" });
+        } else {
+          const state = await getLeetcode(date);
+          await tg("sendMessage", {
+            chat_id: chatId,
+            text: `${prettyKey(date)} - LeetCode: 💻`,
+            reply_markup: leetcodeKeyboard(state, date),
+          });
+        }
+      } else if (cmd === "/bible") {
+        if (!date) {
+          await tg("sendMessage", { chat_id: chatId, text: "Usage: /bible [YYYY-MM-DD]" });
+        } else {
+          const state = await getBible(date);
+          await tg("sendMessage", {
+            chat_id: chatId,
+            text: `${prettyKey(date)} - Read the bible: 📖`,
+            reply_markup: bibleKeyboard(state, date),
           });
         }
       } else if (cmd === "/bath") {

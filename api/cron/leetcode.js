@@ -1,5 +1,5 @@
-import { getBowl } from "../lib/db.js";
-import { bowlKeyboard } from "../lib/keyboard.js";
+import { getLeetcode } from "../lib/db.js";
+import { leetcodeKeyboard } from "../lib/keyboard.js";
 import { CHAT_ID, prettyDate, tg, todayKey } from "../lib/util.js";
 
 export default async function handler(req, res) {
@@ -7,11 +7,11 @@ export default async function handler(req, res) {
     return res.status(401).end();
   }
   const date = todayKey();
-  const state = await getBowl(date);
+  const state = await getLeetcode(date);
   await tg("sendMessage", {
     chat_id: CHAT_ID,
-    text: `${prettyDate()} - Wash the bowls: 🥣`,
-    reply_markup: bowlKeyboard(state, date),
+    text: `${prettyDate()} - LeetCode: 💻`,
+    reply_markup: leetcodeKeyboard(state, date),
   });
   return res.status(200).json({ ok: true });
 }
