@@ -37,7 +37,9 @@ async function handleCallback(cb) {
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: base + marker(state.water && state.food, state.skipped),
+        text:
+          base +
+          marker(state.water && state.food && state.bible && state.leetcode, state.skipped),
         reply_markup: bowlKeyboard(state, date),
       });
     }
