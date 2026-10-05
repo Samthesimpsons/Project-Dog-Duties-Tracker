@@ -7,6 +7,10 @@ export function bowlKeyboard(state, date) {
         { text: `${mark(state.water)} Water bowl`, callback_data: `bowl:water:${date}` },
         { text: `${mark(state.food)} Food bowl`, callback_data: `bowl:food:${date}` },
       ],
+      [
+        { text: `${mark(state.bible)} Read bible`, callback_data: `bowl:bible:${date}` },
+        { text: `${mark(state.leetcode)} LeetCode`, callback_data: `bowl:leetcode:${date}` },
+      ],
       [{ text: `${mark(state.skipped)} Skip today`, callback_data: `bowl:skip:${date}` }],
     ],
   };

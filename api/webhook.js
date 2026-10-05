@@ -37,7 +37,9 @@ async function handleCallback(cb) {
       await tg("editMessageText", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: base + marker(state.water && state.food, state.skipped),
+        text:
+          base +
+          marker(state.water && state.food && state.bible && state.leetcode, state.skipped),
         reply_markup: bowlKeyboard(state, date),
       });
     }
@@ -49,8 +51,8 @@ async function handleCallback(cb) {
 const HELP = [
   "🐶 Commands",
   "",
-  "/bowls - today's bowl checklist",
-  "/bowls YYYY-MM-DD - bowl checklist for that day",
+  "/bowls - today's daily checklist",
+  "/bowls YYYY-MM-DD - daily checklist for that day",
   "/bath - this week's bath checklist",
   "/bath YYYY-MM-DD - bath checklist for the week (Sat-Fri) containing that day",
   "/status - bowl & bath stats for the last 30 days",
@@ -119,7 +121,7 @@ export default async function handler(req, res) {
           const state = await getBowl(date);
           await tg("sendMessage", {
             chat_id: chatId,
-            text: `☀️ ${prettyKey(date)} - wash the bowls:`,
+            text: `☀️ ${prettyKey(date)} - daily checklist:`,
             reply_markup: bowlKeyboard(state, date),
           });
         }
