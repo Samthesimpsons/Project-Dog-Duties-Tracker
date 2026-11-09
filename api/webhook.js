@@ -3,13 +3,21 @@ import {
   getBible,
   getBowl,
   getLeetcode,
+  getQuant,
   getStats,
   toggleBath,
   toggleBible,
   toggleBowl,
   toggleLeetcode,
+  toggleQuant,
 } from "./lib/db.js";
-import { bathKeyboard, bibleKeyboard, bowlKeyboard, leetcodeKeyboard } from "./lib/keyboard.js";
+import {
+  bathKeyboard,
+  bibleKeyboard,
+  bowlKeyboard,
+  leetcodeKeyboard,
+  quantKeyboard,
+} from "./lib/keyboard.js";
 import {
   bathWeek,
   CHAT_ID,
@@ -68,6 +76,15 @@ async function handleCallback(cb) {
         text: base + marker(state.done, state.skipped),
         reply_markup: bibleKeyboard(state, date),
       });
+    } else if (kind === "quant") {
+      const date = key || todayKey();
+      const state = await toggleQuant(date, item);
+      await tg("editMessageText", {
+        chat_id: msg.chat.id,
+        message_id: msg.message_id,
+        text: base + marker(state.done, state.skipped),
+        reply_markup: quantKeyboard(state, date),
+      });
     }
   } finally {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
@@ -83,6 +100,8 @@ const HELP = [
   "/leetcode YYYY-MM-DD - LeetCode checklist for that day",
   "/bible - today's bible checklist",
   "/bible YYYY-MM-DD - bible checklist for that day",
+  "/quant - today's Quant textbook checklist",
+  "/quant YYYY-MM-DD - Quant textbook checklist for that day",
   "/bath - this week's bath checklist",
   "/bath YYYY-MM-DD - bath checklist for the week (Sat-Fri) containing that day",
   "/status - stats for the last 30 days",
@@ -119,6 +138,8 @@ async function handleStatus(chatId) {
     ...(stats.leetcode
       ? section("💻", "LeetCode done", stats.leetcode)
       : ["💻 LeetCode: no data yet"]),
+    ``,
+    ...(stats.quant ? section("📈", "Quant done", stats.quant) : ["📈 Quant: no data yet"]),
     ``,
     `🛁 Baths done: ${stats.bathsDone}/${stats.trackedWeeks} weeks`,
     `${bar(stats.bathDonePct)} ${stats.bathDonePct}% done`,
@@ -184,6 +205,17 @@ export default async function handler(req, res) {
             chat_id: chatId,
             text: `${prettyKey(date)} - Read the bible: 📖`,
             reply_markup: bibleKeyboard(state, date),
+          });
+        }
+      } else if (cmd === "/quant") {
+        if (!date) {
+          await tg("sendMessage", { chat_id: chatId, text: "Usage: /quant [YYYY-MM-DD]" });
+        } else {
+          const state = await getQuant(date);
+          await tg("sendMessage", {
+            chat_id: chatId,
+            text: `${prettyKey(date)} - Read a Quant textbook for 30 minutes: 📈`,
+            reply_markup: quantKeyboard(state, date),
           });
         }
       } else if (cmd === "/bath") {

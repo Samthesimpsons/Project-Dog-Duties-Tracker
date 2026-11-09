@@ -38,6 +38,11 @@ export async function ensureSchema() {
          done    INTEGER NOT NULL DEFAULT 0,
          skipped INTEGER NOT NULL DEFAULT 0
        )`,
+      `CREATE TABLE IF NOT EXISTS quant (
+         date    TEXT PRIMARY KEY,
+         done    INTEGER NOT NULL DEFAULT 0,
+         skipped INTEGER NOT NULL DEFAULT 0
+       )`,
       `CREATE TABLE IF NOT EXISTS meta (
          key   TEXT PRIMARY KEY,
          value TEXT NOT NULL
@@ -152,6 +157,8 @@ export const getLeetcode = (date) => getDaily("leetcode", date);
 export const toggleLeetcode = (date, item) => toggleDaily("leetcode", date, item);
 export const getBible = (date) => getDaily("bible", date);
 export const toggleBible = (date, item) => toggleDaily("bible", date, item);
+export const getQuant = (date) => getDaily("quant", date);
+export const toggleQuant = (date, item) => toggleDaily("quant", date, item);
 
 export async function getBath(week) {
   await ensureSchema();
@@ -206,7 +213,7 @@ async function columnStats(table, doneExpr, start, todayStr) {
 /**
  * Stats over the last `days` days (default 30), starting no earlier than the
  * first day each thing was tracked - so untracked history doesn't count as
- * "missed". Bowls, bible and leetcode are each independent (a day counts as
+ * "missed". Bowls, bible, leetcode and quant are each independent (a day counts as
  * done for one of them if that item was ticked, or that day was skipped on
  * its own checklist); skipped days/weeks are also tallied separately. Bath
  * weeks are the Sat..Fri weeks touched by the same window.
@@ -218,6 +225,7 @@ export async function getStats(todayStr, days = 30) {
   const firstBathWeek = (await db.execute("SELECT MIN(week) AS w FROM baths")).rows[0]?.w;
   const firstBible = (await db.execute("SELECT MIN(date) AS d FROM bible")).rows[0]?.d;
   const firstLeetcode = (await db.execute("SELECT MIN(date) AS d FROM leetcode")).rows[0]?.d;
+  const firstQuant = (await db.execute("SELECT MIN(date) AS d FROM quant")).rows[0]?.d;
   // Days are tracked from the first bowl checklist; if there is none yet, from
   // the week of the first bath. Weeks additionally reach back to the first bath.
   const firstDate = firstBowl ?? (firstBathWeek && weekStartOf(firstBathWeek));
@@ -235,6 +243,9 @@ export async function getStats(todayStr, days = 30) {
     : null;
   const leetcode = firstLeetcode
     ? await columnStats("leetcode", "done = 1", clampToWindow(firstLeetcode), todayStr)
+    : null;
+  const quant = firstQuant
+    ? await columnStats("quant", "done = 1", clampToWindow(firstQuant), todayStr)
     : null;
 
   const bathStart = firstBathWeek ? weekStartOf(firstBathWeek) : start;
@@ -259,6 +270,7 @@ export async function getStats(todayStr, days = 30) {
     bowls,
     bible,
     leetcode,
+    quant,
     trackedWeeks,
     bathsDone,
     bathsMissed: trackedWeeks - bathsDone,

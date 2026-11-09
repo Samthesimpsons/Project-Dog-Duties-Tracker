@@ -48,3 +48,17 @@ export function bibleKeyboard(state, date) {
     ],
   };
 }
+
+export function quantKeyboard(state, date) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: state.done ? "✅ Quant textbook read!" : "⬜ Read Quant textbook (30 min)",
+          callback_data: `quant:done:${date}`,
+        },
+      ],
+      [{ text: `${mark(state.skipped)} Skip today`, callback_data: `quant:skip:${date}` }],
+    ],
+  };
+}
