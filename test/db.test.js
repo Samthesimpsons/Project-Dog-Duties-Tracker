@@ -57,11 +57,11 @@ test("getStats: null with no data, otherwise one session per day", async () => {
 
   const s = await getStats("2026-08-23");
   assert.equal(s.start, "2026-08-21");
-  assert.equal(s.trackedDays, 3);
-  assert.equal(s.doneDays, 1);
-  assert.equal(s.missedDays, 2);
-  assert.equal(s.donePct, 33);
-  assert.equal(s.missedPct, 67);
+  assert.equal(s.bowls.trackedDays, 3);
+  assert.equal(s.bowls.doneDays, 1);
+  assert.equal(s.bowls.missedDays, 2);
+  assert.equal(s.bowls.donePct, 33);
+  assert.equal(s.bowls.missedPct, 67);
   // 2026-08-21 (Fri, W34) .. 2026-08-23 (Sun, W35: the Sat starts a new week) -> 2 weeks, 1 bathed
   assert.equal(s.trackedWeeks, 2);
   assert.equal(s.bathsDone, 1);
@@ -75,8 +75,8 @@ test("getStats: bath in the same week as the first bowl does not add missed bowl
   await toggleBath("2026-W34"); // week of Sat 2026-08-15, before the first bowl day
   const s = await getStats("2026-08-18");
   assert.equal(s.start, "2026-08-18");
-  assert.equal(s.trackedDays, 1);
-  assert.equal(s.doneDays, 1);
+  assert.equal(s.bowls.trackedDays, 1);
+  assert.equal(s.bowls.doneDays, 1);
   assert.equal(s.trackedWeeks, 1);
   assert.equal(s.bathsDone, 1);
 });
@@ -86,7 +86,7 @@ test("getStats: earlier baths widen the week range but not the day range", async
   await getBowl("2026-08-18");
   const s = await getStats("2026-08-18");
   assert.equal(s.start, "2026-08-18");
-  assert.equal(s.trackedDays, 1);
+  assert.equal(s.bowls.trackedDays, 1);
   assert.equal(s.trackedWeeks, 2); // W33, W34
   assert.equal(s.bathsDone, 1);
   assert.equal(s.bathsMissed, 1);
@@ -108,12 +108,12 @@ test("getStats: a skipped day counts as done and is reported separately", async 
   await toggleBowl("2026-08-22", "skip"); // skipped -> counts as done
   await getBowl("2026-08-23"); // untouched -> missed
   const s = await getStats("2026-08-23");
-  assert.equal(s.trackedDays, 3);
-  assert.equal(s.doneDays, 2);
-  assert.equal(s.missedDays, 1);
-  assert.equal(s.donePct, 67);
-  assert.equal(s.skippedDays, 1);
-  assert.equal(s.skippedPct, 33);
+  assert.equal(s.bowls.trackedDays, 3);
+  assert.equal(s.bowls.doneDays, 2);
+  assert.equal(s.bowls.missedDays, 1);
+  assert.equal(s.bowls.donePct, 67);
+  assert.equal(s.bowls.skippedDays, 1);
+  assert.equal(s.bowls.skippedPct, 33);
 });
 
 test("getStats: a day both ticked and skipped counts once", async () => {
@@ -121,10 +121,10 @@ test("getStats: a day both ticked and skipped counts once", async () => {
   await toggleBowl("2026-08-21", "food");
   await toggleBowl("2026-08-21", "skip");
   const s = await getStats("2026-08-21");
-  assert.equal(s.trackedDays, 1);
-  assert.equal(s.doneDays, 1);
-  assert.equal(s.missedDays, 0);
-  assert.equal(s.skippedDays, 1);
+  assert.equal(s.bowls.trackedDays, 1);
+  assert.equal(s.bowls.doneDays, 1);
+  assert.equal(s.bowls.missedDays, 0);
+  assert.equal(s.bowls.skippedDays, 1);
 });
 
 test("getStats: a skipped week counts as a bath done", async () => {
@@ -140,6 +140,6 @@ test("getStats: a skipped week counts as a bath done", async () => {
 test("getStats window is capped at 30 days", async () => {
   await toggleBowl("2026-01-01", "water");
   const s = await getStats("2026-08-18");
-  assert.equal(s.trackedDays, 30);
+  assert.equal(s.bowls.trackedDays, 30);
   assert.equal(s.start, "2026-07-20");
 });

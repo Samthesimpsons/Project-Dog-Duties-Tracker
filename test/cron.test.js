@@ -27,7 +27,7 @@ test("bowl cron sends checklist with bowl:* callback data to CHAT_ID", async () 
   const { method, payload } = calls[0];
   assert.equal(method, "sendMessage");
   assert.equal(payload.chat_id, "12345");
-  assert.match(payload.text, /wash the bowls/);
+  assert.match(payload.text, /Wash the bowls/);
   const data = payload.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
   assert.deepEqual(data, [
     `bowl:water:${todayKey()}`,

@@ -150,7 +150,7 @@ test("/bowls YYYY-MM-DD opens that day's checklist and buttons carry the date", 
   calls.length = 0;
   await post(msg("/bowls 2026-08-18"));
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].payload.text, "☀️ Tue 18 Aug - wash the bowls:");
+  assert.equal(calls[0].payload.text, "Tue 18 Aug - Wash the bowls: 🥣");
   const [water, food] = calls[0].payload.reply_markup.inline_keyboard[0];
   assert.equal(water.text, "✅ Water bowl");
   assert.equal(water.callback_data, "bowl:water:2026-08-18");
